@@ -288,7 +288,7 @@ class EnergySurplusApp:
         # --------------------------
         # Summary section (pie charts)
         # --------------------------
-        summary = EnergySummary(df_plot, mode, title=f"SUMMARY", time_horizon_days=time_horizon_days, selected_date=selected_date)
+        summary = EnergySummary(df_plot, mode, title=f"ENERGY SUMMARY", time_horizon_days=time_horizon_days, selected_date=selected_date)
         summary.show_summary()
         st.markdown("---")
 
