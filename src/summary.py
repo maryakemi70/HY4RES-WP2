@@ -37,7 +37,7 @@ class EnergySummary:
 
     def show_summary(self):
         # --- Title ---
-        st.markdown(f"<h2 style='text-align:center'>{self.title} LALALALALALAL</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='text-align:center'>{self.title}</h2>", unsafe_allow_html=True)
         st.markdown(
             f"<h3 style='text-align:center'>{self.time_horizon_days }-day ahead cumulative total from {self.selected_date} </h3>",
             unsafe_allow_html=True
@@ -137,3 +137,4 @@ class EnergySummary:
                 unsafe_allow_html=True
 
             )
+
