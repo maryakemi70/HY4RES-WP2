@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import os
 import streamlit as st
 import matplotlib
@@ -180,7 +179,7 @@ if __name__ == "__main__":
     # streamlit cache clear
     # cd C:\Users\Win\PycharmProjects\IntegrationOfModels\Streamlit
     # streamlit run app.py
-=======
+
 import os
 import streamlit as st
 import matplotlib

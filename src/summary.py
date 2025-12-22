@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import streamlit as st
 import plotly.graph_objects as go
 import folium
@@ -139,7 +138,7 @@ class EnergySummary:
 
             )
 
-=======
+
 import streamlit as st
 import plotly.graph_objects as go
 import folium
@@ -278,4 +277,3 @@ class EnergySummary:
                  """,
                 unsafe_allow_html=True
             )
->>>>>>> cb3e47a (Actualizo app.py, summary.py y requirements.txt en Streamlit)
