@@ -3,7 +3,7 @@ import streamlit as st
 import matplotlib
 import plotly.subplots as sp
 
-matplotlib.use('Agg')  # backend no interactivo, perfecto para Streamlit
+matplotlib.use('Agg')
 from PIL import Image
 
 from src.header import DashboardHeader
@@ -117,11 +117,11 @@ class EnergySurplusApp:
 
         # Multiselect para que el usuario elija qué mostrar
         st.markdown(
-            f"<h2 style='text-align:center;color:white'>ENERGY SURPLUS</h2>",
+            f"<h2 style='text-align:center'>ENERGY SURPLUS</h2>",
             unsafe_allow_html=True
         )
         st.markdown(
-            f"<h3 style='text-align:center;color:white'>{mode} forecast from {selected_date} up to {time_horizon_days}-day ahead</h32>",
+            f"<h3 style='text-align:center'>{mode} forecast from {selected_date} up to {time_horizon_days}-day ahead</h32>",
             unsafe_allow_html=True
         )
 
