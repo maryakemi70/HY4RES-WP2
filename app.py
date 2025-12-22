@@ -2,10 +2,8 @@ import os
 import streamlit as st
 import matplotlib
 import plotly.subplots as sp
-
-matplotlib.use('Agg')
+matplotlib.use('Agg')  # backend no interactivo, perfecto para Streamlit
 from PIL import Image
-
 from src.header import DashboardHeader
 from src.data_loader import DataLoader
 from src.surplus_calculator import SurplusCalculator
