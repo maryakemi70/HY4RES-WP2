@@ -14,7 +14,7 @@ class DashboardHeader:
 
     def render(self):
         st.markdown(
-            f"<h2 style='text-align: center; font-weight: 600;'>{self.title_main}</h2>"
+            f"<h1 style='text-align: center; font-weight: 600;'>{self.title_main}</h1>"
             f"<h3 style='text-align: center; font-weight: 600;'>{self.title_sub}</h3>",
             unsafe_allow_html=True
         )

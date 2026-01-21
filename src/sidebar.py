@@ -20,12 +20,6 @@ class Sidebar:
         # --------------------------
         # Header logo
         # --------------------------
-        # st.sidebar.markdown(
-        #     f"<h1 style='text-align: center; margin-bottom: 0;'>{self.title}</h1>",
-        #     unsafe_allow_html=True
-        # )
-
-
         st.sidebar.image(
             self.logo_path,
             width='stretch'
@@ -34,43 +28,36 @@ class Sidebar:
         st.sidebar.markdown("---")
 
         # --------------------------
-        # Section selector (SOLO selector)
+        # Initialize page selector
+        # --------------------------
+        if "page_selector" not in st.session_state:
+            st.session_state.page_selector = "Energy Surplus"
+
+        # --------------------------
+        # Section selector
         # --------------------------
         with st.sidebar.expander("Select section", expanded=True):
             page = st.radio(
                 "Section:",
                 options=[
                     "Energy Surplus",
-                    "Optimization",
-                    "Environmental Indicators"
-                ]
+                    "Life Cycle Impact Assessment",
+                    "Optimization"
+                ],
+                key="page_selector"
             )
 
         # --------------------------
-        # Partner logos (AL FINAL del sidebar)
+        # Partner logos
         # --------------------------
         st.sidebar.markdown("---")
 
-        # Horizontal 1
-        st.sidebar.image(
-            self.img_logo1_path,
-            width='stretch'
-        )
-
+        st.sidebar.image(self.img_logo1_path, width='stretch')
         st.sidebar.markdown("<br>", unsafe_allow_html=True)
 
-        # Horizontal 2
-        st.sidebar.image(
-            self.img_logo2_path,
-            width='stretch'
-        )
-
+        st.sidebar.image(self.img_logo2_path, width='stretch')
         st.sidebar.markdown("<br>", unsafe_allow_html=True)
 
-        # Horizontal 3
-        st.sidebar.image(
-            self.img_logo3_path,
-            width='stretch'
-        )
+        st.sidebar.image(self.img_logo3_path, width='stretch')
 
         return page
