@@ -1,3 +1,4 @@
+import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -44,8 +45,9 @@ EI_METADATA = {
 }
 
 class ImpactAssessment:
-    def __init__(self, df_tables: dict, grid_reference_impacts: dict, time_horizon_days=7, selected_date="2026-01-19"):
+    def __init__(self, df_tables: dict, energy_tables: dict, grid_reference_impacts: dict, time_horizon_days=7, selected_date="2026-01-19"):
         self.df_tables = df_tables
+        self.df_daily_energy = energy_tables
         self.grid_reference_impacts = grid_reference_impacts  # Initialize grid_reference_impacts
         self.time_horizon_days = time_horizon_days
         self.selected_date = selected_date
@@ -62,11 +64,11 @@ class ImpactAssessment:
         # 1. OVERALL ENVIRONMENTAL BALANCE
         # ==================================================
         st.markdown(
-            "<h2 style='text-align:center'>Overall Environmental Balance</h2>",
+            "<h2 style='text-align:center'>Overall Environmental Total</h2>",
             unsafe_allow_html=True
         )
         st.markdown(
-            f"<h3 style='text-align:center'>Total {self.time_horizon_days}-day cumulative balance since {self.selected_date}</h3>",
+            f"<h3 style='text-align:center'>Total {self.time_horizon_days}-day cumulative since {self.selected_date}</h3>",
             unsafe_allow_html=True
         )
 
@@ -153,9 +155,6 @@ class ImpactAssessment:
         )
         summary.show_summary()
 
-
-        # ==================================================
-        #
         # ==================================================
         # First Table: Raw Impacts
         raw_impacts = []
@@ -172,13 +171,12 @@ class ImpactAssessment:
                 "Self-Consumption Impact": self_impact,
                 "Grid Impact": grid_impact,
                 "Export Impact": export_impact,
-                # "Balance Impact": balance_impact
+                "Total Impact": balance_impact
             })
 
         df_raw_impacts = pd.DataFrame(raw_impacts)
         df_raw_impacts['Units'] = df_raw_impacts['Indicator'].map(
-            lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')}"
-        )
+            lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')}")
 
         st.markdown("<h2 style='text-align:center'>Raw Environmental Impacts</h2>", unsafe_allow_html=True)
         st.dataframe(df_raw_impacts.style.format({
@@ -186,10 +184,100 @@ class ImpactAssessment:
             "Self-Consumption Impact": "{:.2f}",
             "Grid Impact": "{:.2f}",
             "Export Impact": "{:.2f}",
-            # "Balance Impact": "{:.2f}"
+            "Total Impact": "{:.2f}"
         }))
 
-        # Second Table: Calculation Results
+        # ==================================================
+        # Second Table: Ratio based on 1 kWh
+        # Fix Datetime column name if needed
+        self.df_daily_energy.columns = self.df_daily_energy.columns.str.strip()
+
+        if "Datetime" not in self.df_daily_energy.columns:
+            raise KeyError("'Datetime' column not found in df_daily_energy")
+
+        # Prepare energy data
+        energy_data = self.df_daily_energy[[
+            "Datetime", "SelfConsumption", "GridConsumption", "ExportToGrid"
+        ]].copy()
+
+        energy_data = energy_data.rename(columns={"Datetime": "Date"})
+        energy_data["Date"] = pd.to_datetime(energy_data["Date"], errors="coerce")
+        energy_data = energy_data.dropna(subset=["Date"])
+
+        # Calcular totales de kWh para cada caso
+        total_self = energy_data["SelfConsumption"].sum()
+        total_grid = energy_data["GridConsumption"].sum()
+        total_export = energy_data["ExportToGrid"].sum()
+
+        impact_ratios = []
+        # Iterate over environmental indicator tables
+        for indicator, table in self.df_tables.items():
+
+            # Ensure Date exists
+            if "Date" not in table.columns:
+                table = table.reset_index()
+
+            table["Date"] = pd.to_datetime(table["Date"], errors="coerce")
+            table = table.dropna(subset=["Date"])
+
+            # Extraer los impactos totales directamente de la tabla
+            total_self_impact = table.iloc[:, 2].sum()  # Columna de SelfConsumption Impact
+            total_grid_impact = table.iloc[:, 1].sum()  # Columna de GridConsumption Impact
+            total_export_impact = table.iloc[:, 3].sum()  # Columna de ExportToGrid Impact
+
+            # Calcular los factores dividiendo el impacto total entre la energía total consumida
+            self_factor = total_self_impact / total_self if total_self > 0 else np.nan
+            grid_factor = total_grid_impact / total_grid if total_grid > 0 else np.nan
+            export_factor = total_export_impact / total_export if total_export > 0 else np.nan
+
+            # Almacenar los factores en la lista
+            impact_ratios.append({
+                "Indicator": indicator,
+                "Self Impact per kWh": self_factor,
+                "Grid Impact per kWh": grid_factor,
+                "Export Impact per kWh": export_factor,
+            })
+
+        # Crear un DataFrame con los factores de impacto
+        df_impact_ratios = pd.DataFrame(impact_ratios)
+
+        # Agregar la columna 'Unit' con la unidad de cada indicador
+        df_impact_ratios['Unit'] = df_impact_ratios['Indicator'].map(
+            lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')} / 1 kWh"
+        )
+
+        # Identificar la fila de 'ADP_elements'
+        adp_elements_mask = df_impact_ratios['Indicator'] == 'ADP_elements'
+
+        # Guardar los valores originales de 'ADP_elements' para formatearlos después
+        adp_elements_values = df_impact_ratios.loc[adp_elements_mask, [
+            'Self Impact per kWh', 'Grid Impact per kWh', 'Export Impact per kWh'
+        ]].copy()
+
+        # Mostrar la tabla con los valores formateados de 'ADP_elements'
+        st.markdown("<h2 style='text-align:center'>Impact Factors per 1 kWh</h2>", unsafe_allow_html=True)
+
+        # Formatear las demás filas con un máximo de 10 decimales
+        df_impact_ratios.loc[~adp_elements_mask, [
+            'Self Impact per kWh', 'Grid Impact per kWh', 'Export Impact per kWh'
+        ]] = df_impact_ratios.loc[~adp_elements_mask, [
+            'Self Impact per kWh', 'Grid Impact per kWh', 'Export Impact per kWh'
+        ]].astype(float).applymap(lambda x: round(x, 7))
+
+        # Aplicar el formato general al resto del DataFrame
+        st.dataframe(
+            df_impact_ratios.style.format({
+                "Self Impact per kWh": "{:.6f}",
+                "Grid Impact per kWh": "{:.6f}",
+                "Export Impact per kWh": "{:.6f}"}))
+
+        # Formatear los valores de 'ADP_elements' en notación científica
+        df_impact_ratios.loc[adp_elements_mask, [
+            'Self Impact per kWh', 'Grid Impact per kWh', 'Export Impact per kWh'
+        ]] = adp_elements_values.astype(float).applymap(lambda x: f"{x:.2e}")
+
+        # ==================================================
+        # Third Table: Calculation Results
         calculation_results = []
         for indicator, table in self.df_tables.items():
             impact_reference = self.grid_reference_impacts.get(indicator, 0)
@@ -203,38 +291,47 @@ class ImpactAssessment:
                 impact_balance / impact_reference * 100
                 if impact_reference != 0 else 0
             )
+            net_pct_num = (
+                impact_reference - impact_balance
+                if impact_reference != 0 else 0
+            )
 
             calculation_results.append({
                 "Indicator": indicator,
-                "Impact Avoided (%)": avoided_pct,
+                "Relative Environmental Avoided of PV Grid Export (%)": avoided_pct,
                 "Net Environmental Impact (%)": net_pct,
-                "Net Impact (absolute)": impact_balance
+                f"Net Environmental Impact Avoided (PV Installation)": net_pct_num
             })
 
         df_calculation_results = pd.DataFrame(calculation_results)
         df_calculation_results['Units'] = df_calculation_results['Indicator'].map(
-            lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')}"
-        )
+            lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')}")
 
-        st.markdown("<h2 style='text-align:center'>Calculation Results</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align:center'>Results Comparative calculations with the Reference Impact</h2>", unsafe_allow_html=True)
         st.dataframe(df_calculation_results.style.format({
-            "Impact Avoided (%)": "{:.1f}",
+            "Relative Environmental Avoided of PV Grid Export (%)": "{:.1f}",
             "Net Environmental Impact (%)": "{:.1f}",
-            "Net Impact (absolute)": "{:.2f}"
+            "Net Environmental Impact Avoided (PV Installation)": "{:.2f}"
         }))
-        st.markdown("---")
+        # st.write("### Notes on Interpretation")
+        st.markdown(r"""
+            - Percentages **greater than 100 %** indicate that the system avoids more environmental impact than it generates under the grid-only reference scenario.
+            - Negative values of **Net Environmental Impact** indicate a **net environmental benefit**.
+            - These indicators are **interpretative metrics** and are therefore presented within the **Interpretation phase**, in accordance with ISO 14040 and ISO 14044.
+                            """
+            )
 
         with st.expander("📘 Calculation methodology and interpretation criteria"):
             st.markdown(
                 r"""
-        ### Environmental Impact Avoided (%)
+        ### Relative Environmental Avoided of PV Grid Export (%)
         
         Represents the relative environmental benefit obtained by exporting photovoltaic
         electricity to the grid, compared to a reference scenario where the same electricity
         would be supplied entirely by the conventional grid mix.
         
         $$
-        \text{Impact Avoided} =
+        \text{Impact Avoided of PV Grid Export} =
         \frac{|EI_{export}|}{EI_{grid\ only}} \times 100
         $$
         
@@ -247,17 +344,27 @@ class ImpactAssessment:
         
         $$
         \text{Net Impact} =
-        \frac{EI_{balance}}{EI_{grid\ only}} \times 100
+        \frac{EI_{total}}{EI_{grid\ only}} \times 100
         $$
         
         ---
         
-        ### Environmental Impact Balance
+        ### Net Environmental Impact Avoided (PV Installation)
+        
+        Represents the total environmental impact avoided through the installation of the PV solar plant.
+        
+        $$
+        \text{Net Impact Avoided (PV Installation)} = EI_{grid\ only} - EI_{total}
+        $$
+        
+        ---
+        
+        ### Environmental Impact Total
         
         The net environmental impact is calculated as:
         
         $$
-        EI_{balance} = EI_{self} + EI_{grid} + EI_{export}
+        EI_{total} = EI_{self} + EI_{grid} - EI_{export}
         $$
         
         where:
@@ -266,16 +373,6 @@ class ImpactAssessment:
         - $EI_{grid}$: Environmental impact associated with electricity imported from the grid
         - $EI_{export}$: Avoided environmental impact due to electricity exported to the grid
         - $EI_{grid\ only}$: Reference impact assuming the total electricity demand is supplied exclusively by the grid
-        
-        ---
-        
-        ### Net Impact (Absolute)
-        
-        Represents the total environmental impact balance in absolute terms, combining all contributions.
-        
-        $$
-        \text{Net Impact (Absolute)} = EI_{balance}
-        $$
         
         ---
         
@@ -304,6 +401,35 @@ class ImpactAssessment:
           the **Interpretation phase**, in accordance with ISO 14040 and ISO 14044.
                 """
             )
+
+        st.markdown("---")
+
+        # Mostrar los valores totales en la interfaz
+        st.markdown("<h2 style='text-align:center'>***** DEBUG *****</h2>", unsafe_allow_html=True)
+        st.write("Total SelfConsumption (kWh):", total_self)
+        st.write("Total GridConsumption (kWh):", total_grid)
+        st.write("Total ExportToGrid (kWh):", total_export)
+        indicators = [
+            {"energy_source": "Hydropower_kWh", "GWP100": 0.004345569, "ADP_fossil": 0.041796964,
+             "ADP_elements": 1.92e-08, "UDP": 0.002012897},
+            {"energy_source": "Nuclear_kWh", "GWP100": 0.006867669, "ADP_fossil": 13.22250307, "ADP_elements": 1.22e-07,
+             "UDP": 0.132012697},
+            {"energy_source": "Coal_kWh", "GWP100": 1.162411024, "ADP_fossil": 11.50390196, "ADP_elements": 2.53e-07,
+             "UDP": 0.080646243},
+            {"energy_source": "Combined Cycle_kWh", "GWP100": 0.542820929, "ADP_fossil": 8.762179906,
+             "ADP_elements": 3.96e-07, "UDP": 0.038174794},
+            {"energy_source": "Wind Power_kWh", "GWP100": 0.014954465, "ADP_fossil": 0.189552053,
+             "ADP_elements": 4.37e-07, "UDP": 0.006437735},
+            {"energy_source": "PV Solar Power_kWh", "GWP100": 0.04708697, "ADP_fossil": 0.675875675,
+             "ADP_elements": 3.07E-07, "UDP": 0.009741405},
+            {"energy_source": "Thermal Solar Power_kWh", "GWP100": 0.053462332, "ADP_fossil": 0.7623678,
+             "ADP_elements": 4.51E-07, "UDP": 0.010223263},
+            {"energy_source": "Cogeneration_kWh", "GWP100": 0.05309101, "ADP_fossil": 0.62826523674379,
+             "ADP_elements": 1.55E-07, "UDP": 0.050522554206717},
+            {"energy_source": "Fuel + Gas_kWh", "GWP100": 0.922840552, "ADP_fossil": 10.92181924,
+             "ADP_elements": 1.85E-07, "UDP": 0.054939536},
+        ]
+        st.write("Indicators:", indicators)
 
 
 class Summary:

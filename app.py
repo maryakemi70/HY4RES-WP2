@@ -392,7 +392,7 @@ class EnergySurplusApp:
         # ==================================================
         with st.expander("Phase 2) Life Cycle Inventory (LCI) Analysis - ISO 14040 Principles & Framework", expanded=False):
             st.markdown(
-                "<h1 style='text-align:center'>Life Cycle Impact Assessment (LCIA) - ISO 14040 Principles & Framework</h1>",
+                "<h1 style='text-align:center'>Life Cycle Inventory (LCI) Analysis - ISO 14040 Principles & Framework</h1>",
                 unsafe_allow_html=True
             )
 
@@ -507,6 +507,7 @@ class EnergySurplusApp:
             # Pass grid_reference_impacts to ImpactAssessment
             dashboard = ImpactAssessment(
                 df_tables=tables,  # Tables of environmental indicators
+                energy_tables=df_daily_energy,  # Energy tables
                 grid_reference_impacts=grid_reference_impacts,  # Pass the calculated impacts
                 time_horizon_days=time_horizon_days,
                 selected_date=selected_date
@@ -521,49 +522,84 @@ class EnergySurplusApp:
             st.markdown(
                 f"<h1 style='text-align:center'>Interpretation of Results - ISO 14044 Requirements & Guidelines</h1>",
                 unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align:center'>Presentation of Accurate Results</h2>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div style="
+                    background-color:#2f3e46;
+                    padding:20px;
+                    border-radius:14px;
+                    color:white;
+                    box-shadow:0 4px 10px rgba(0,0,0,0.18);
+                    line-height:1.6
+                ">
 
-            # st.markdown(
-            #     f"""
-            #     <div style="
-            #         background-color:#2f3e46;
-            #         padding:24px;
-            #         border-radius:16px;
-            #         color:white;
-            #         box-shadow:0 6px 14px rgba(0,0,0,0.2);
-            #         line-height:1.7
-            #     ">
-            #
-            #     <h4 style="margin-top:0;color:#e9ecef">
-            #         How to interpret the environmental impact assessment
-            #     </h4>
-            #
-            #     <strong>Reference scenario (Grid-only):</strong><br>
-            #     All electricity demand is supplied exclusively by the electrical grid.
-            #     This scenario represents the baseline environmental impact (100%) used
-            #     for normalization.<br><br>
-            #
-            #     <strong>Self Consumption:</strong><br>
-            #     Environmental impact associated with on-site photovoltaic electricity
-            #     generation that is directly consumed by the system.<br><br>
-            #
-            #     <strong>Grid Consumption:</strong><br>
-            #     Residual environmental impact caused when on-site solar generation is
-            #     insufficient and electricity must be imported from the grid.<br><br>
-            #
-            #     <strong>Export to Grid (Environmental Savings):</strong><br>
-            #     Avoided environmental impact due to surplus photovoltaic electricity
-            #     exported to the grid, displacing conventional electricity generation.
-            #     This value represents an environmental benefit.<br><br>
-            #
-            #     <strong>Net Environmental Balance:</strong><br>
-            #     The overall environmental footprint of the system, accounting for both
-            #     consumed impacts and avoided impacts. Values below 100% indicate an
-            #     improvement compared to the grid-only reference scenario.
-            #
-            #     </div>
-            #     """,
-            #     unsafe_allow_html=True
-            # )
+                  <div style="margin:0; padding:0;">
+                  <strong style="font-size:20px; display:block; margin-bottom:0;">Analysis Type:</strong>
+                  <ul style="list-style-position: inside; margin:0; padding:0;">
+                      <li style="margin:0; padding:0;">Uncertainly Analysis</li>
+                      <li style="margin:0; padding:0;">Sensitivity Analysis</li>
+                      <li style="margin:0; padding:0;">Contribution Analysis.</li>
+                      <li style="margin:0; padding:0;">Scenarios.</li>
+                  </ul>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            st.markdown("---")
+            st.markdown("<h2 style='text-align:center'>Conclusions & Recommendations</h2>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div style="
+                    background-color:#2f3e46;
+                    padding:24px;
+                    border-radius:16px;
+                    color:white;
+                    box-shadow:0 6px 14px rgba(0,0,0,0.2);
+                    line-height:1.7
+                ">
+
+                <h4 style="margin-top:0;color:#e9ecef">
+                    How to interpret the environmental impact assessment
+                </h4>
+
+                <strong>Reference scenario (Grid-only):</strong>
+                All electricity demand is supplied exclusively by the electrical grid.
+                This scenario represents the baseline environmental impact (100%) used
+                for normalization.<br>
+
+                <strong>Self Consumption:</strong>
+                Environmental impact associated with on-site photovoltaic electricity
+                generation that is directly consumed by the system.<br>
+
+                <strong>Grid Consumption:</strong>
+                Residual environmental impact caused when on-site solar generation is
+                insufficient and electricity must be imported from the grid.<br>
+
+                <strong>Export to Grid (Environmental Savings):</strong>
+                Avoided environmental impact due to surplus photovoltaic electricity
+                exported to the grid, displacing conventional electricity generation.
+                This value represents an environmental benefit.<br>
+
+                <strong>Net Environmental Balance:</strong>
+                The overall environmental footprint of the system, accounting for both
+                consumed impacts and avoided impacts. Values below 100% indicate an
+                improvement compared to the grid-only reference scenario.
+
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            st.markdown("---")
+            st.markdown("<h2 style='text-align:center'>Summary Overview</h2>", unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown("<h2 style='text-align:center'>Report</h2>", unsafe_allow_html=True)
+            st.markdown("---")
+
+
             #
             # st.markdown(
             #     """
