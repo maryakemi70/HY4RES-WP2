@@ -46,7 +46,7 @@ class EnergySummary:
 
         # --- Totals ---
         total_self = self.df['SelfConsumption'].sum()
-        total_grid = self.df['GridConsumption'].sum()
+        total_grid = self.df['ImportfromGrid'].sum()
         total_export = self.df['ExportToGrid'].sum()
         total_energy = total_self + total_grid + total_export
         total_demand = self.df['Demand'].sum()
@@ -56,7 +56,7 @@ class EnergySummary:
                        total_grid / total_energy * 100,
                        total_export / total_energy * 100]
         values = [total_self, total_grid, total_export]
-        labels = ['Self-Consumption 🔄', 'Grid Consumption ⬅️', 'Export to Grid ➡️']
+        labels = ['Self-Consumption 🔄', 'Import from Grid ⬅️', 'Export to Grid ➡️']
 
         # --- Columns: Donut + Map ---
         col1, col2 = st.columns([2, 1])

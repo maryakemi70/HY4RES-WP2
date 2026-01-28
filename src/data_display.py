@@ -23,19 +23,28 @@ class DataDisplay:
     # TABELA CSV
     # -----------------------
     def show_table_with_download(self, filename: str = "data.csv", height: int = 250):
-        """
-        Exibe um dataframe e adiciona botão para download CSV.
-        """
         if self.df is None:
             st.warning("No dataframe provided.")
             return
 
+        # AGREGA TITULO DE GRUPO PV
+        # Crear el Styler
+        styler = self.df.style
+        # Aplicar PV group header si existen las columnas
+        if {"Self Consumption", "Export to Grid"}.issubset(self.df.columns):
+            styler = self.add_pv_group_header(styler)
+
+
+        # Mostrar en Streamlit con hide_index
         st.dataframe(
-            self.df,
+            styler,
             height=height,
-            use_container_width=True
+            use_container_width=True,
+            hide_index=True
         )
 
+
+        # Botón de descarga CSV
         csv_bytes = self.df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="📥 Download CSV",
@@ -82,3 +91,29 @@ class DataDisplay:
         except ValueError:
             pass
             # st.info("📌 To enable JPG download, install the 'kaleido' package: pip install -U kaleido")
+
+
+    def add_pv_group_header(self, styler, pv_cols=("Self Consumption", "Export to Grid")):
+        """
+        Adds a visual header above the PV columns in the Styler.
+        """
+        styles = []
+
+        # Asegurarse de que el Styler tenga dataframe
+        df_cols = list(styler.data.columns)
+
+        for col in pv_cols:
+            if col in df_cols:
+                idx = df_cols.index(col)
+                styles.append({
+                    "selector": f"th.col_heading.level0.col{idx}",
+                    "props": [
+                        ("border-top", "3px solid #f4a261"),
+                        ("background-color", "#fef3c7"),
+                        ("color", "#92400e"),
+                        ("text-align", "center"),
+                        ("font-weight", "bold")
+                    ]
+                })
+
+        return styler.set_table_styles(styles)

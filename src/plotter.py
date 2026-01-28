@@ -14,7 +14,7 @@ class LastDateEnergyPlotter:
         else:
             df_last168 = self.df.tail(168).copy()
             df_last168['Date'] = df_last168['Datetime'].dt.date
-            cols_to_sum = ['SelfConsumption', 'ExportToGrid', 'GridConsumption', 'Demand', 'Production']
+            cols_to_sum = ['SelfConsumption', 'ImportfromGrid', 'ExportToGrid', 'Demand', 'Production']
             df_daily = df_last168.groupby('Date')[cols_to_sum].sum().reset_index()
             df_daily['Datetime'] = pd.to_datetime(df_daily['Date'])
             df_daily.drop(columns='Date', inplace=True)
@@ -22,14 +22,14 @@ class LastDateEnergyPlotter:
 
         # Limites de Y (para hover / referencia)
         self.ymin = 0
-        self.ymax = self.df[['SelfConsumption', 'ExportToGrid', 'GridConsumption', 'Demand', 'Production']].max().max() * 1.1
+        self.ymax = self.df[['SelfConsumption', 'ImportfromGrid', 'ExportToGrid', 'Demand', 'Production']].max().max() * 1.1
 
         # Garantir tipos corretos e ordenação
         self._sanitize_dataframe()
 
     def _sanitize_dataframe(self):
         """Garante datetime, float e ordenação"""
-        cols_numeric = ['SelfConsumption', 'ExportToGrid', 'GridConsumption', 'Demand', 'Production']
+        cols_numeric = ['SelfConsumption', 'ImportfromGrid', 'ExportToGrid', 'Demand', 'Production']
         self.df['Datetime'] = pd.to_datetime(self.df['Datetime'], errors='coerce')
         self.df.dropna(subset=['Datetime'], inplace=True)
 
@@ -95,17 +95,17 @@ class LastDateEnergyPlotter:
         else:
             return self._plot_bar('SelfConsumption', 'Self-Consumption (kWh)', 'green')
 
+    def plot_grid_consumption(self):
+        if self.mode == 'hourly':
+            return self._plot_line('ImportfromGrid', 'Import from Grid (kWh)', '#D22C41')
+        else:
+            return self._plot_bar('ImportfromGrid', 'Import from Grid (kWh)', '#D22C41')
+
     def plot_export_to_grid(self):
         if self.mode == 'hourly':
             return self._plot_line('ExportToGrid', 'Export to Grid (kWh)', '#2078FF')
         else:
             return self._plot_bar('ExportToGrid', 'Export to Grid (kWh)', '#2078FF', bottom_col='SelfConsumption')
-
-    def plot_grid_consumption(self):
-        if self.mode == 'hourly':
-            return self._plot_line('GridConsumption', 'Grid Consumption (kWh)', '#D22C41')
-        else:
-            return self._plot_bar('GridConsumption', 'Grid Consumption (kWh)', '#D22C41')
 
     def plot_demand_vs_production(self):
         """Plot de Demand vs Production com linhas"""
@@ -142,8 +142,8 @@ class LastDateEnergyPlotter:
     def plot_all(self):
         return {
             'SelfConsumption': self.plot_self_consumption(),
+            'ImportfromGrid': self.plot_grid_consumption(),
             'ExportToGrid': self.plot_export_to_grid(),
-            'GridConsumption': self.plot_grid_consumption(),
             'DemandVsProduction': self.plot_demand_vs_production()
         }
 
@@ -162,7 +162,7 @@ class LastDateEnergyPlotter:
         # Mapear nombres a datos y colores
         trace_map = {
             'SelfConsumption': ('SelfConsumption', 'green'),
-            'GridConsumption': ('GridConsumption', '#D22C41'),
+            'ImportfromGrid': ('ImportfromGrid', '#D22C41'),
             'ExportToGrid': ('ExportToGrid', '#2078FF'),
             'Demand': ('Demand', '#AA4BFF'),
             'Production': ('Production', '#FF8D4B')
@@ -203,9 +203,9 @@ class LastDateEnergyPlotter:
                 mode='lines+markers', name='SelfConsumption (kWh)',
                 line=dict(color='green')
             ),
-            'GridConsumption': go.Scatter(
-                x=self.df['Datetime'].to_list(), y=self.df['GridConsumption'].to_list(),
-                mode='lines+markers', name='GridConsumption (kWh)',
+            'ImportfromGrid': go.Scatter(
+                x=self.df['Datetime'].to_list(), y=self.df['ImportfromGrid'].to_list(),
+                mode='lines+markers', name='Import from Grid (kWh)',
                 line=dict(color='red')
             ),
             'ExportToGrid': go.Scatter(

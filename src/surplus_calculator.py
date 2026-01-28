@@ -22,7 +22,7 @@ class SurplusCalculator:
         df['SelfConsumption'] = df[['Production', 'Demand']].min(axis=1)
 
         # Energía consumida de la red: cuando la demanda supera la producción
-        df['GridConsumption'] = df.apply(
+        df['ImportfromGrid'] = df.apply(
             lambda row: max(row['Demand'] - row['Production'], 0), axis=1
         )
 
@@ -50,14 +50,14 @@ class SurplusCalculator:
         df_filtered = self.result[self.result['Datetime'] >= start_dt].copy()
 
         # Columnas a sumar
-        cols_to_sum = ['Demand', 'Production', 'SelfConsumption', 'GridConsumption', 'ExportToGrid']
+        cols_to_sum = ['Demand', 'Production', 'SelfConsumption', 'ExportToGrid', 'ImportfromGrid']
 
         # Agrupar por día
         df_filtered['Date'] = df_filtered['Datetime'].dt.date
         df_daily = df_filtered.groupby('Date')[cols_to_sum].sum().reset_index()
         df_daily['Datetime'] = pd.to_datetime(df_daily['Date'])
         df_daily = df_daily.head(days)
-        df_daily = df_daily[['Datetime', 'Demand', 'Production', 'SelfConsumption', 'GridConsumption', 'ExportToGrid']]
+        df_daily = df_daily[['Datetime', 'Demand', 'Production', 'SelfConsumption', 'ExportToGrid', 'ImportfromGrid']]
 
         if export_csv:
             df_daily.to_csv(export_csv, index=False)
@@ -79,7 +79,7 @@ class SurplusCalculator:
         df_last_hours = self.result.tail(hours).copy()
 
         # Columnas a sumar
-        cols_to_sum = ['Demand', 'Production', 'SelfConsumption', 'GridConsumption', 'ExportToGrid']
+        cols_to_sum = ['Demand', 'Production', 'SelfConsumption', 'ExportToGrid', 'ImportfromGrid']
 
         # Agrupar por día y sumar
         df_last_hours['Date'] = df_last_hours['Datetime'].dt.date
@@ -88,7 +88,7 @@ class SurplusCalculator:
         df_daily = df_daily.tail(7)  # últimos 7 días
 
         # Reordenar columnas según el orden deseado
-        df_daily = df_daily[['Datetime', 'Demand', 'Production', 'SelfConsumption', 'GridConsumption', 'ExportToGrid']]
+        df_daily = df_daily[['Datetime', 'Demand', 'Production', 'SelfConsumption', 'ExportToGrid', 'ImportfromGrid']]
 
         # Exportar a CSV si se indica
         if export_csv:

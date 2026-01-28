@@ -1,5 +1,7 @@
 import streamlit as st
 
+from src.services.energy_data_service import EnergyDataService
+
 
 class Sidebar:
     def __init__(
@@ -25,23 +27,82 @@ class Sidebar:
             width='stretch'
         )
 
+        #  =========================
+        #  Translate
+        #  =========================
+        if "lang" not in st.session_state:
+            st.session_state.lang = "English"
+
+        lang = st.sidebar.selectbox(
+            "🌍 Language",
+            ["English", "Spanish", "Portuguese", "French"],
+            index=["English", "Spanish", "Portuguese", "French"].index(st.session_state.lang)
+        )
+
+        st.session_state.lang = lang
+        st.sidebar.markdown("---")
+
+        # --------------------------
+        # Time settings
+        # --------------------------
+        st.sidebar.markdown("## ⏱ Time Settings")
+
+        daily_full = EnergyDataService().get_daily_full()
+
+        min_date = daily_full["Datetime"].min().date()
+        max_date = daily_full["Datetime"].max().date()
+
+        # Init defaults
+        if "selected_date" not in st.session_state:
+            st.session_state.selected_date = min_date
+
+        if "time_horizon_days" not in st.session_state:
+            st.session_state.time_horizon_days = 7
+
+        if "time_resolution" not in st.session_state:
+            st.session_state.time_resolution = "daily"
+
+        # Start Date
+        st.session_state.selected_date = st.sidebar.date_input(
+            "Start date",
+            value=st.session_state.selected_date,
+            min_value=min_date,
+            max_value=max_date
+        )
+
+        # Time Horizon
+        st.session_state.time_horizon_days = st.sidebar.slider(
+            "Time horizon (days)",
+            min_value=1,
+            max_value=7,
+            value=st.session_state.time_horizon_days
+        )
+
+        # Time Resolution
+        st.session_state.time_resolution = st.sidebar.selectbox(
+            "Time resolution",
+            ["daily", "hourly"],
+            index=["daily", "hourly"].index(st.session_state.time_resolution)
+        )
+
         st.sidebar.markdown("---")
 
         # --------------------------
         # Initialize page selector
         # --------------------------
+        st.sidebar.markdown("## Sessions")
         if "page_selector" not in st.session_state:
-            st.session_state.page_selector = "Energy Surplus"
+            st.session_state.page_selector = "Introduction"
 
         # --------------------------
         # Section selector
         # --------------------------
         with st.sidebar.expander("Select section", expanded=True):
-            page = st.radio(
-                "Section:",
+            page = st.radio("",
                 options=[
-                    "Energy Surplus",
-                    "Life Cycle Impact Assessment",
+                    "Introduction",
+                    "Energy Performance",
+                    "Life Cycle Impact",
                     "Optimization"
                 ],
                 key="page_selector"

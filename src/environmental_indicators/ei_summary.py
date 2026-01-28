@@ -3,8 +3,14 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
+from src.utils.formating import style_impact_table
+from src.utils.formating import get_inverse_color
+from src.utils.formating import raw_style_impact_table
+from src.utils.formating import add_pv_multiheader
+
 EI_METADATA = {
     "GWP100": {
+        "name": "Climate Change (GWP100)",
         "title": "Global Warming Potential (GWP100)",
         "impact_category": "Climate Change",
         "unit": "kg CO₂-Eq",
@@ -15,6 +21,7 @@ EI_METADATA = {
         )
     },
     "ADP_fossil": {
+        "name": "Energy resources: non-renewable (ADP_fossil)",
         "title": "Abiotic Depletion Potential – Fossil Fuels",
         "impact_category": "Energy resources: non-renewable",
         "unit": "MJ (net calorific value)",
@@ -24,6 +31,7 @@ EI_METADATA = {
         )
     },
     "ADP_elements": {
+        "name": "Material resources: metals/minerals (ADP_elements)",
         "title": "Abiotic Depletion Potential – Elements",
         "impact_category": "Material resources: metals/minerals",
         "unit": "kg Sb-Eq",
@@ -34,6 +42,7 @@ EI_METADATA = {
         )
     },
     "UDP": {
+        "name": "Water use (UDP)",
         "title": "User Deprivation Potential (UDP)",
         "impact_category": "Water use",
         "unit": "m³ world Eq deprived",
@@ -43,6 +52,14 @@ EI_METADATA = {
         )
     }
 }
+
+NORMALIZATION_FACTORS = {
+    "Climate Change (GWP100)": 7.55E+03,
+    "Energy resources: non-renewable (ADP_fossil)": 6.50E+04,
+    "Material resources: metals/minerals (ADP_elements)": 6.36E-02,
+    "Water use (UDP)": 1.15E+04
+}
+
 
 class ImpactAssessment:
     def __init__(self, df_tables: dict, energy_tables: dict, grid_reference_impacts: dict, time_horizon_days=7, selected_date="2026-01-19"):
@@ -58,13 +75,62 @@ class ImpactAssessment:
             "Balance": "#AA4BFF"
         }
 
-    def show_dashboard(self):
+        # Crear df_raw_impacts y df_calculation_results aquí
+        self.df_raw_impacts = self._compute_raw_impacts()
+        self.df_calculation_results = self._compute_calculation_results()
 
+    def _compute_raw_impacts(self):
+        raw_impacts = []
+        for indicator, table in self.df_tables.items():
+            self_impact = table.iloc[:, 1].sum()
+            export_impact = table.iloc[:, 2].sum()
+            grid_impact = table.iloc[:, 3].sum()
+            balance_impact = self_impact + grid_impact - export_impact
+            reference_impact = self.grid_reference_impacts.get(indicator, 0)
+
+            raw_impacts.append({
+                "Indicator": indicator,
+                "Reference Impact (Grid-Only)": reference_impact,
+                "Self Consumption": self_impact,
+                "Export to Grid": export_impact,
+                "Import from Grid": grid_impact,
+                "Net Impact": balance_impact
+            })
+
+        df = pd.DataFrame(raw_impacts)
+        df["Units"] = df["Indicator"].map(lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')}")
+        df["Indicator"] = df["Indicator"].map(lambda x: EI_METADATA.get(x, {}).get("name", x))
+        return df
+
+    def _compute_calculation_results(self):
+        calculation_results = []
+        for indicator, table in self.df_tables.items():
+            impact_reference = self.grid_reference_impacts.get(indicator, 0)
+            impact_balance = table.iloc[:, 4].sum()
+
+            avoided_pct = (abs(table.iloc[:, 3].sum()) / impact_reference * 100 if impact_reference != 0 else 0)
+            net_pct = (impact_balance / impact_reference * 100 if impact_reference != 0 else 0)
+            net_pct_num = (impact_reference - impact_balance if impact_reference != 0 else 0)
+
+            calculation_results.append({
+                "Indicator": indicator,
+                "Relative Environmental Avoided of PV Grid Export (%)": avoided_pct,
+                "Net Environmental Impact (%)": net_pct,
+                "Net Environmental Impact Avoided (PV Installation)": net_pct_num
+            })
+
+        df = pd.DataFrame(calculation_results)
+        df["Units"] = df["Indicator"].map(lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')}")
+        df["Indicator"] = df["Indicator"].map(lambda x: EI_METADATA.get(x, {}).get("name", x))
+        return df
+
+    def show_dashboard(self):
         # ==================================================
         # 1. OVERALL ENVIRONMENTAL BALANCE
         # ==================================================
+
         st.markdown(
-            "<h2 style='text-align:center'>Overall Environmental Total</h2>",
+            "<h2 style='text-align:center'>Overall Net Environmental Impact</h2>",
             unsafe_allow_html=True
         )
         st.markdown(
@@ -72,7 +138,7 @@ class ImpactAssessment:
             unsafe_allow_html=True
         )
 
-        balances, indicator_names, units = [], [], []
+        balances, indicator_names, units, indicator_simple_names = [], [], [], []
 
         # --- Calculamos balance total por indicador ---
         for name, table in self.df_tables.items():
@@ -80,12 +146,16 @@ class ImpactAssessment:
             unit = col_balance.split("(")[-1].replace(")", "")
             balance_total = table.iloc[:, 4].sum()
             balances.append(balance_total)
-            indicator_names.append(name)
+            indicator_names.append(
+                EI_METADATA.get(name, {}).get("name", name)
+            )
+            indicator_simple_names.append(name)
+
             units.append(unit)
 
         # --- Barra global por indicador ---
         fig = go.Figure(go.Bar(
-            x=indicator_names,
+            x=indicator_simple_names,
             y=balances,
             marker_color=self.colors["Balance"]
         ))
@@ -97,14 +167,16 @@ class ImpactAssessment:
 
         col_chart, col_info = st.columns([3, 1])
         with col_chart:
-            st.plotly_chart(fig, use_container_width=True)
+            # st.plotly_chart(fig, use_container_width=True)
 
             cols = st.columns(len(indicator_names))
             for col, name, value, unit in zip(cols, indicator_names, balances, units):
                 formatted = f"{value:.2e}" if abs(value) < 0.01 else f"{value:.2f}"
+                bg_color = get_inverse_color(value)
+
                 col.markdown(
                     f"""
-                    <div style="background-color:{self.colors['Balance']};
+                    <div style="background-color:{bg_color};
                                 padding:14px;
                                 border-radius:12px;
                                 text-align:center;
@@ -135,7 +207,100 @@ class ImpactAssessment:
             )
 
         # ==================================================
-        # 3. SUMMARY (INDICATOR SELECTION BELOW TITLE)
+        # 2. NORMALIZED ENVIRONMENTAL BALANCE
+        # ==================================================
+        st.markdown("")
+        normalized_balances = []
+        for simple_name, full_name, value in zip(indicator_simple_names, indicator_names, balances):
+            nf = NORMALIZATION_FACTORS.get(full_name, None)
+            if nf:
+                normalized_balances.append(value / nf)
+            else:
+                st.write(f"Normalization factor not found for {full_name}")
+                normalized_balances.append(None)
+
+        fig_norm = go.Figure(go.Bar(
+            x=indicator_simple_names,
+            y=normalized_balances,
+            marker_color=self.colors["Balance"]
+        ))
+
+        fig_norm.update_layout(
+            yaxis_title="Normalized Impact (EF 3.1)",
+            xaxis_title="Environmental Indicator",
+            template="plotly_white"
+        )
+
+        st.markdown(
+            "<h3 style='text-align:center'>Normalized Environmental Impact (EF 3.1)</h3>",
+            unsafe_allow_html=True
+        )
+
+        col_norm_chart, col_norm_info = st.columns([3, 1])
+
+        with col_norm_chart:
+            st.plotly_chart(fig_norm, use_container_width=True)
+
+            # ---- NORMALIZED RESULT CARDS ----
+            cols_norm = st.columns(len(indicator_names))
+            for col, name, value, unit, norm_val in zip(
+                    cols_norm, indicator_names, balances, units, normalized_balances):
+                formatted_norm = (
+                    f"{norm_val:.2e}" if norm_val is not None and abs(norm_val) < 0.01
+                    else f"{norm_val:.3f}" if norm_val is not None
+                    else "N/A"
+                )
+
+                bg_color = get_inverse_color(norm_val)
+
+                col.markdown(
+                    f"""
+                    <div style="background-color:{bg_color};
+                                padding:14px;
+                                border-radius:12px;
+                                text-align:center;
+                                color:white">
+                        <strong>{name}</strong><br>
+                        <span style="font-size:22px;font-weight:bold">{formatted_norm}</span><br>
+                        <small>Normalized (EF 3.1)</small>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+        with col_norm_info:
+            st.markdown(
+                """
+                <div style="background-color:#2f3e46;
+                            padding:18px;
+                            border-radius:14px;
+                            color:white">
+                <strong>Normalization Source:</strong><br><br>
+
+                Updated characterisation and normalisation factors<br>
+                for the Environmental Footprint 3.1 method<br><br>
+
+                <strong>Publisher:</strong> Joint Research Centre (JRC)<br><br>
+
+                <strong>Table:</strong> Table 10 — Normalisation Factors (EF3.1)<br>
+                Reference year: 2010<br>
+                Population: 6,895,889,018 persons<br><br>
+
+                CF = Characterisation Factor<br><br>
+
+                <strong>Official Report:</strong><br>
+                <a href="https://publications.jrc.ec.europa.eu/repository/bitstream/JRC130796/JRC130796_01.pdf"
+                   target="_blank"
+                   style="color:#9bdcfa;text-decoration:underline;">
+                   View JRC EF 3.1 Report (PDF)
+                </a>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        # ==================================================
+        # 3. SUMMARY (CONTRIBUTION ANALYSIS)
         # ==================================================
         st.markdown("")
         st.markdown(f"<h2 style='text-align:center'>Detailed Environmental Indicator Results</h2>", unsafe_allow_html=True)
@@ -143,10 +308,22 @@ class ImpactAssessment:
             f"<h3 style='text-align:center'>{self.time_horizon_days}-day cumulative total from {self.selected_date}</h3>",
             unsafe_allow_html=True
         )
-        selected_indicator = st.selectbox(
+
+        # ======================================
+        # Summary Visual for Selected Indicator
+        indicator_map = {
+            k: EI_METADATA.get(k, {}).get("name", k)
+            for k in self.df_tables.keys()
+        }
+
+        selected_label = st.selectbox(
             "Select environmental indicator",
-            list(self.df_tables.keys())
+            list(indicator_map.values())
         )
+
+        selected_indicator = [
+            k for k, v in indicator_map.items() if v == selected_label
+        ][0]
 
         summary = Summary(
             {selected_indicator: self.df_tables[selected_indicator]},
@@ -159,33 +336,47 @@ class ImpactAssessment:
         # First Table: Raw Impacts
         raw_impacts = []
         for indicator, table in self.df_tables.items():
-            self_impact = table.iloc[:, 2].sum()
-            grid_impact = table.iloc[:, 1].sum()
-            export_impact = table.iloc[:, 3].sum()
-            balance_impact = self_impact + grid_impact + export_impact
+            self_impact = table.iloc[:, 1].sum()
+            export_impact = table.iloc[:, 2].sum()
+            grid_impact = table.iloc[:, 3].sum()
+            balance_impact = self_impact + grid_impact - export_impact
             reference_impact = self.grid_reference_impacts.get(indicator, 0)
 
             raw_impacts.append({
                 "Indicator": indicator,
                 "Reference Impact (Grid-Only)": reference_impact,
-                "Self-Consumption Impact": self_impact,
-                "Grid Impact": grid_impact,
-                "Export Impact": export_impact,
-                "Total Impact": balance_impact
+                "Self Consumption": self_impact,
+                "Export to Grid": export_impact,
+                "Import from Grid": grid_impact,
+                "Net Impact": balance_impact
             })
 
+        # Crear DataFrame
         df_raw_impacts = pd.DataFrame(raw_impacts)
         df_raw_impacts['Units'] = df_raw_impacts['Indicator'].map(
             lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')}")
 
+        df_raw_impacts["Indicator"] = df_raw_impacts["Indicator"].map(
+            lambda x: EI_METADATA.get(x, {}).get("name", x)
+        )
+
+        # -------------------------------
+        # Agregar fila PV Solar Production
+        # -------------------------------
+        # Solo si existen las columnas Self Consumption y Export to Grid
+        if {"Self Consumption", "Export to Grid"}.issubset(df_raw_impacts.columns):
+            df_raw_impacts = add_pv_multiheader(df_raw_impacts.copy())
+
         st.markdown("<h2 style='text-align:center'>Raw Environmental Impacts</h2>", unsafe_allow_html=True)
-        st.dataframe(df_raw_impacts.style.format({
-            "Reference Impact (Grid-Only)": "{:.2f}",
-            "Self-Consumption Impact": "{:.2f}",
-            "Grid Impact": "{:.2f}",
-            "Export Impact": "{:.2f}",
-            "Total Impact": "{:.2f}"
-        }))
+        st.dataframe(
+            raw_style_impact_table(
+                df_raw_impacts,
+                indicator_col=("", "Indicator"),  # Nivel 0 vacío, Nivel 1 "Indicator"
+                metric="ADP_elements",
+                net_col=("", "Net Impact")  # Nivel 0 vacío, Nivel 1 "Net Impact"
+            ),
+            hide_index=True
+        )
 
         # ==================================================
         # Second Table: Ratio based on 1 kWh
@@ -197,7 +388,7 @@ class ImpactAssessment:
 
         # Prepare energy data
         energy_data = self.df_daily_energy[[
-            "Datetime", "SelfConsumption", "GridConsumption", "ExportToGrid"
+            "Datetime", "SelfConsumption", "ImportfromGrid", "ExportToGrid"
         ]].copy()
 
         energy_data = energy_data.rename(columns={"Datetime": "Date"})
@@ -206,7 +397,7 @@ class ImpactAssessment:
 
         # Calcular totales de kWh para cada caso
         total_self = energy_data["SelfConsumption"].sum()
-        total_grid = energy_data["GridConsumption"].sum()
+        total_grid = energy_data["ImportfromGrid"].sum()
         total_export = energy_data["ExportToGrid"].sum()
 
         impact_ratios = []
@@ -219,62 +410,42 @@ class ImpactAssessment:
 
             table["Date"] = pd.to_datetime(table["Date"], errors="coerce")
             table = table.dropna(subset=["Date"])
+            # # write los nombres de las columnas
+            # st.write(f"### Columns in table for {indicator}: {table.columns.tolist()}")
 
             # Extraer los impactos totales directamente de la tabla
-            total_self_impact = table.iloc[:, 2].sum()  # Columna de SelfConsumption Impact
-            total_grid_impact = table.iloc[:, 1].sum()  # Columna de GridConsumption Impact
-            total_export_impact = table.iloc[:, 3].sum()  # Columna de ExportToGrid Impact
+            total_self_impact = table.iloc[:, 1].sum()  # Columna de SelfConsumption Impact
+            # total_export_impact = table.iloc[:, 2].sum()  # Columna de ExportToGrid Impact
+            total_grid_impact = table.iloc[:, 3].sum()  # Columna de ImporttoGrid Impact
 
             # Calcular los factores dividiendo el impacto total entre la energía total consumida
             self_factor = total_self_impact / total_self if total_self > 0 else np.nan
             grid_factor = total_grid_impact / total_grid if total_grid > 0 else np.nan
-            export_factor = total_export_impact / total_export if total_export > 0 else np.nan
+            # export_factor = total_export_impact / total_export if total_export > 0 else np.nan
 
             # Almacenar los factores en la lista
             impact_ratios.append({
                 "Indicator": indicator,
-                "Self Impact per kWh": self_factor,
-                "Grid Impact per kWh": grid_factor,
-                "Export Impact per kWh": export_factor,
+                "PV Solar Factor": self_factor,
+                # "Export to Grid": export_factor,
+                "Mix Grid Factor": grid_factor,
             })
 
         # Crear un DataFrame con los factores de impacto
         df_impact_ratios = pd.DataFrame(impact_ratios)
 
         # Agregar la columna 'Unit' con la unidad de cada indicador
-        df_impact_ratios['Unit'] = df_impact_ratios['Indicator'].map(
+        df_impact_ratios['Units'] = df_impact_ratios['Indicator'].map(
             lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')} / 1 kWh"
         )
 
-        # Identificar la fila de 'ADP_elements'
-        adp_elements_mask = df_impact_ratios['Indicator'] == 'ADP_elements'
-
-        # Guardar los valores originales de 'ADP_elements' para formatearlos después
-        adp_elements_values = df_impact_ratios.loc[adp_elements_mask, [
-            'Self Impact per kWh', 'Grid Impact per kWh', 'Export Impact per kWh'
-        ]].copy()
+        df_impact_ratios["Indicator"] = df_impact_ratios["Indicator"].map(
+            lambda x: EI_METADATA.get(x, {}).get("name", x)
+        )
 
         # Mostrar la tabla con los valores formateados de 'ADP_elements'
-        st.markdown("<h2 style='text-align:center'>Impact Factors per 1 kWh</h2>", unsafe_allow_html=True)
-
-        # Formatear las demás filas con un máximo de 10 decimales
-        df_impact_ratios.loc[~adp_elements_mask, [
-            'Self Impact per kWh', 'Grid Impact per kWh', 'Export Impact per kWh'
-        ]] = df_impact_ratios.loc[~adp_elements_mask, [
-            'Self Impact per kWh', 'Grid Impact per kWh', 'Export Impact per kWh'
-        ]].astype(float).applymap(lambda x: round(x, 7))
-
-        # Aplicar el formato general al resto del DataFrame
-        st.dataframe(
-            df_impact_ratios.style.format({
-                "Self Impact per kWh": "{:.6f}",
-                "Grid Impact per kWh": "{:.6f}",
-                "Export Impact per kWh": "{:.6f}"}))
-
-        # Formatear los valores de 'ADP_elements' en notación científica
-        df_impact_ratios.loc[adp_elements_mask, [
-            'Self Impact per kWh', 'Grid Impact per kWh', 'Export Impact per kWh'
-        ]] = adp_elements_values.astype(float).applymap(lambda x: f"{x:.2e}")
+        st.markdown("<h2 style='text-align:center'>Impact Factors</h2>", unsafe_allow_html=True)
+        st.dataframe(style_impact_table(df_impact_ratios, scientific_all=True), hide_index=True)
 
         # ==================================================
         # Third Table: Calculation Results
@@ -307,12 +478,16 @@ class ImpactAssessment:
         df_calculation_results['Units'] = df_calculation_results['Indicator'].map(
             lambda x: f"{EI_METADATA.get(x, {}).get('unit', '')}")
 
+        df_calculation_results["Indicator"] = df_calculation_results["Indicator"].map(
+            lambda x: EI_METADATA.get(x, {}).get("name", x)
+        )
+
         st.markdown("<h2 style='text-align:center'>Results Comparative calculations with the Reference Impact</h2>", unsafe_allow_html=True)
         st.dataframe(df_calculation_results.style.format({
             "Relative Environmental Avoided of PV Grid Export (%)": "{:.1f}",
             "Net Environmental Impact (%)": "{:.1f}",
             "Net Environmental Impact Avoided (PV Installation)": "{:.2f}"
-        }))
+        }), hide_index=True)
         # st.write("### Notes on Interpretation")
         st.markdown(r"""
             - Percentages **greater than 100 %** indicate that the system avoids more environmental impact than it generates under the grid-only reference scenario.
@@ -332,7 +507,7 @@ class ImpactAssessment:
         
         $$
         \text{Impact Avoided of PV Grid Export} =
-        \frac{|EI_{export}|}{EI_{grid\ only}} \times 100
+        \frac{EI_{export}}{EI_{grid\ only}} \times 100
         $$
         
         ---
@@ -406,9 +581,9 @@ class ImpactAssessment:
 
         # Mostrar los valores totales en la interfaz
         st.markdown("<h2 style='text-align:center'>***** DEBUG *****</h2>", unsafe_allow_html=True)
-        st.write("Total SelfConsumption (kWh):", total_self)
-        st.write("Total GridConsumption (kWh):", total_grid)
-        st.write("Total ExportToGrid (kWh):", total_export)
+        st.write("Total Self Consumption (kWh):", total_self)
+        st.write("Total Import from Grid (kWh):", total_grid)
+        st.write("Total Export to Grid (kWh):", total_export)
         indicators = [
             {"energy_source": "Hydropower_kWh", "GWP100": 0.004345569, "ADP_fossil": 0.041796964,
              "ADP_elements": 1.92e-08, "UDP": 0.002012897},
@@ -453,14 +628,6 @@ class Summary:
             "Balance": "#AA4BFF"   # Balance neto
         }
 
-        # Explicaciones de cada indicador
-        self.explanations = {
-            "GWP100": "Impact Category: Climate Change -> Global Warming Potential (GWP100). Contribución al cambio climático en kg CO2-Eq/kWh generado.",
-            "ADP_fossil": "Impact Category: Energy resources: non-renewable -> Abiotic Depletion Potential (Fossil Fuels). Mide agotamiento de recursos fósiles (MJ net calorific value).",
-            "ADP_elements": "Impact Category: Elements -> Abiotic Depletion Potential (Elements). Escasez de elementos minerales críticos (kg Sb-Eq).",
-            "UDP": "Impact Category: Land & Water -> Use of freshwater (UDP). Consumo de agua dulce mundial equivalente (m3 world Eq deprived)."
-        }
-
     def show_summary(self):
         for indicator_name, table in self.df_tables.items():
             # Extraer las unidades desde los nombres de columna
@@ -475,17 +642,18 @@ class Summary:
             unit_balance = col_balance.split('(')[-1].replace(')', '')
 
             # Totales acumulados
-            total_self = table.iloc[:, 2].sum()
-            total_grid = table.iloc[:, 1].sum()
-            total_export = table.iloc[:, 3].sum() * -1  # Invertimos signo para mostrar como ahorro
+            # st.write("columns name table:", table.columns.tolist())
+            total_self = table.iloc[:, 1].sum()
+            total_export = table.iloc[:, 2].sum()
+            total_grid = table.iloc[:, 3].sum()
             total_balance = total_self + total_grid - total_export  # Balance neto considerando ahorro
 
             # Labels y valores
-            labels = ['Self Consumption 🔄', 'Grid Consumption ⬅️', 'Export to Grid ➡️']
+            labels = ['Self Consumption 🔄', 'Export to Grid ➡️', 'Import from Grid ⬅️']
             values = {
-                "Self Consumption": total_self,  # positivo
-                "Grid Consumption": total_grid,  # positivo
-                "Export to Grid": -abs(total_export),  # negativo real
+                "Self Consumption": total_self,
+                "Export to Grid": total_export,
+                "Import from Grid": total_grid,
                 "Net Balance": total_balance  # puede ser + o -
             }
 
@@ -503,40 +671,40 @@ class Summary:
 
                 categories = [
                     "Self Consumption",
-                    "Grid Consumption",
                     "Export to Grid",
+                    "Import from Grid",
                     "Net Balance"
                 ]
 
                 values = [
                     total_self,
+                    total_export,
                     total_grid,
-                    -abs(total_export),  # NEGATIVO
                     total_balance
                 ]
 
                 colors = [
                     self.colors["Self"],
-                    self.colors["Grid"],
                     self.colors["Export"],
+                    self.colors["Grid"],
                     self.colors["Balance"]
                 ]
 
                 fig = go.Figure()
 
                 fig.add_trace(go.Bar(
-                    x=["Self Consumption", "Grid Consumption", "Export to Grid", "Net Balance"],
-                    y=[total_self, total_grid, -abs(total_export), total_balance],
+                    x=["Self Consumption", "Export to Grid", "Import from Grid",  "Net Balance"],
+                    y=[total_self, total_export, total_grid, total_balance],
                     marker_color=[
                         self.colors["Self"],
-                        self.colors["Grid"],
                         self.colors["Export"],
+                        self.colors["Grid"],
                         self.colors["Balance"]
                     ],
                     text=[
                         f"{total_self:.2f}",
+                        f"{total_export:.2f}",
                         f"{total_grid:.2f}",
-                        f"{-abs(total_export):.2f}",
                         f"{total_balance:.2f}"
                     ],
                     textposition="auto",
@@ -560,11 +728,11 @@ class Summary:
                         automargin=True
                     ),
                     font=dict(size=15),
-                    title=dict(
-                        text=f"{indicator_name} – Life Cycle Impact Assessment Results",
-                        x=0.5,
-                        font=dict(size=20)
-                    )
+                    # title=dict(
+                    #     text=f"{indicator_name} – Life Cycle Impact Results",
+                    #     x=0.5,
+                    #     font=dict(size=20)
+                    # )
                 )
 
                 # Línea de referencia en cero (MUY IMPORTANTE)
@@ -609,6 +777,8 @@ class Summary:
                     """,
                     unsafe_allow_html=True
                 )
+
+
 
 
 

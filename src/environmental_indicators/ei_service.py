@@ -70,7 +70,7 @@ class EnvironmentalIndicatorsService:
         for ind in indicators:
             source_col = ind["energy_source"].replace("_kWh", "")
             if source_col in df.columns:
-                df[ind["energy_source"]] = df["GridConsumption"] * df[source_col] / 100.0
+                df[ind["energy_source"]] = df["ImportfromGrid"] * df[source_col] / 100.0
             else:
                 df[ind["energy_source"]] = 0.0  # Si no hay columna, ponemos 0
 
@@ -101,18 +101,24 @@ class EnvironmentalIndicatorsService:
             total_self = df["SelfConsumption"] * pv_factor
 
             # ExportToGrid (negativo)
-            total_export = - df["ExportToGrid"] * pv_factor
+            total_export = df["ExportToGrid"] * pv_factor
 
             # Balance
-            total_balance = total_grid + total_self + total_export
+            total_balance = total_grid + total_self - total_export
 
-            # Guardar columnas renombradas con unidades
-            table[f"Grid Consumption ({unit})"] = total_grid
-            table[f"Self Consumption ({unit})"] = total_self
-            table[f"Export To Grid ({unit})"] = total_export
-            table[f"Balance ({unit})"] = total_balance
+            # Guardar columnas SIN métricas/unidades en el nombre
+            table["Self Consumption"] = total_self
+            table["Export to Grid"] = total_export
+            table["Import from Grid"] = total_grid
+            table["Net Impact"] = total_balance
 
             tables[metric] = table
+
+            # Redondeo de valores (NO tocar ADP_elements)
+            if metric != "ADP_elements":
+                for col in table.columns:
+                    if col != "Date":
+                        table[col] = table[col].round(1)
 
         # Eliminamos columna auxiliar 'date'
         df.drop(columns=['date'], inplace=True)
@@ -132,7 +138,7 @@ class EnvironmentalIndicatorsService:
         df = df.merge(self.df_mix_grid.drop(columns=['Datetime']), on='date', how='left')
 
         # Total energy demand (kWh_reference)
-        df['kWh_reference'] = df['SelfConsumption'] + df['GridConsumption']
+        df['kWh_reference'] = df['SelfConsumption'] + df['ImportfromGrid']
 
         # Initialize dictionary for grid reference impacts
         grid_reference_impacts = {metric: 0 for metric in ["GWP100", "ADP_fossil", "ADP_elements", "UDP"]}
