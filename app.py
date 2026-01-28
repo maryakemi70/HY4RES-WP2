@@ -22,6 +22,7 @@ from src.environmental_indicators.ei_summary import ImpactAssessment, EI_METADAT
 from src.utils.formating import style_impact_table, color_net_impact, add_pv_multiheader
 from deep_translator import GoogleTranslator
 from src.intro_page import IntroPage
+from deep_translator import GoogleTranslator
 
 # Translate function
 @st.cache_data(show_spinner=False)
@@ -65,7 +66,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-from deep_translator import GoogleTranslator
 
 @st.cache_data(show_spinner=False)
 def translate_text(text, target_lang):
